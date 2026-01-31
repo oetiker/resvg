@@ -104,26 +104,35 @@ fn mask_to_png(mask: &MaskData, width: u32, height: u32) -> Option<Vec<u8>> {
         return None;
     }
 
-    // Check for overflow: width * height must fit in usize
-    let capacity = (width as usize).checked_mul(height as usize)?;
+    // Check for overflow: width * height * 4 must fit in usize
+    let capacity = (width as usize)
+        .checked_mul(height as usize)?
+        .checked_mul(4)?;
 
-    // Decode mask data to 8-bit grayscale
-    let mut grayscale = Vec::with_capacity(capacity);
+    // Decode mask data to RGBA: black pixels with alpha from grayscale
+    // Glyph pixels → (0, 0, 0, 255), background → (0, 0, 0, 0)
+    // The grayscale value maps to alpha: alpha = 255 - gray
+    let mut rgba = Vec::with_capacity(capacity);
 
     for y in 0..height {
         for x in 0..width {
-            grayscale.push(extract_mask_pixel(
+            let gray = extract_mask_pixel(
                 mask.data,
                 x,
                 y,
                 width,
                 mask.bpp,
                 mask.is_packed,
-            ));
+            );
+            let alpha = 255 - gray;
+            rgba.push(0);     // R
+            rgba.push(0);     // G
+            rgba.push(0);     // B
+            rgba.push(alpha); // A
         }
     }
 
-    encode_png(&grayscale, width, height, png::ColorType::Grayscale)
+    encode_png(&rgba, width, height, png::ColorType::Rgba)
 }
 
 /// Convert BGRA bitmap data to PNG format.
@@ -150,6 +159,31 @@ fn bgra_to_png(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
     }
 
     encode_png(&rgba, width, height, png::ColorType::Rgba)
+}
+
+/// Colorize a mask PNG by replacing RGB channels with the given fill color,
+/// preserving the alpha channel. Used to apply SVG `fill` color to monochrome
+/// bitmap glyphs which are rendered as black-on-transparent PNGs.
+fn colorize_mask_png(png_data: &[u8], color: Color) -> Option<Vec<u8>> {
+    let decoder = png::Decoder::new(std::io::Cursor::new(png_data));
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()?];
+    let info = reader.next_frame(&mut buf).ok()?;
+    let buf = &mut buf[..info.buffer_size()];
+
+    if info.color_type != png::ColorType::Rgba {
+        return None;
+    }
+
+    // Replace RGB channels with fill color, preserve alpha
+    for pixel in buf.chunks_exact_mut(4) {
+        pixel[0] = color.red;
+        pixel[1] = color.green;
+        pixel[2] = color.blue;
+        // pixel[3] (alpha) unchanged
+    }
+
+    encode_png(buf, info.width, info.height, png::ColorType::Rgba)
 }
 
 fn resolve_rendering_mode(text: &Text) -> ShapeRendering {
@@ -312,8 +346,24 @@ fn flatten_impl(
                 new_children.push(Node::Group(Box::new(group)));
             }
             // A bitmap glyph.
-            else if let Some(img) = cache.fontdb_raster(glyph.font, glyph.id, glyph.font_size()) {
+            else if let Some(mut img) = cache.fontdb_raster(glyph.font, glyph.id, glyph.font_size()) {
                 push_outline_paths(span, &mut span_builder, &mut new_children, rendering_mode);
+
+                // Apply fill color to monochrome bitmap mask glyphs
+                if img.is_mask {
+                    if let Some(ref fill) = span.fill {
+                        if let Paint::Color(c) = fill.paint {
+                            // Only colorize if not already black (optimization)
+                            if c.red != 0 || c.green != 0 || c.blue != 0 {
+                                if let ImageKind::PNG(ref png_arc) = img.image.kind {
+                                    if let Some(colored) = colorize_mask_png(png_arc, c) {
+                                        img.image.kind = ImageKind::PNG(Arc::new(colored));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 let transform = if img.is_sbix {
                     glyph.sbix_transform(
@@ -726,6 +776,7 @@ pub(crate) struct BitmapImage {
     pixels_per_em: f32,
     glyph_bbox: Option<GlyphBbox>,
     is_sbix: bool,
+    is_mask: bool,
 }
 
 impl DatabaseExt for Database {
@@ -845,7 +896,7 @@ impl DatabaseExt for Database {
             let bitmap_data = bitmap_glyph.data;
 
             // Handle different bitmap formats
-            let (png_data, width, height): (Vec<u8>, u32, u32) = match bitmap_data {
+            let (png_data, width, height, is_mask): (Vec<u8>, u32, u32, bool) = match bitmap_data {
                 BitmapData::Png(data) => {
                     // Get PNG dimensions using imagesize
                     let (w, h) = if let Ok(size) = imagesize::blob_size(data) {
@@ -855,14 +906,14 @@ impl DatabaseExt for Database {
                         let ppem = strike.ppem();
                         (ppem as u32, ppem as u32)
                     };
-                    (data.to_vec(), w, h)
+                    (data.to_vec(), w, h, false)
                 }
                 BitmapData::Mask(mask) => {
                     // Convert monochrome/grayscale mask to PNG
                     let w = bitmap_glyph.width;
                     let h = bitmap_glyph.height;
                     match mask_to_png(&mask, w, h) {
-                        Some(png) => (png, w, h),
+                        Some(png) => (png, w, h, true),
                         None => return None,
                     }
                 }
@@ -871,7 +922,7 @@ impl DatabaseExt for Database {
                     let w = bitmap_glyph.width;
                     let h = bitmap_glyph.height;
                     match bgra_to_png(data, w, h) {
-                        Some(png) => (png, w, h),
+                        Some(png) => (png, w, h, false),
                         None => return None,
                     }
                 }
@@ -933,6 +984,7 @@ impl DatabaseExt for Database {
                 pixels_per_em: strike.ppem(),
                 glyph_bbox,
                 is_sbix,
+                is_mask,
             };
 
             Some(bitmap_image)
