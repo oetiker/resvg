@@ -85,18 +85,29 @@ impl PositionedGlyph {
         // Use a tolerance to snap to exactly 1.0 and avoid floating point precision issues.
         let bitmap_scale = self.units_per_em as f32 / pixels_per_em;
         let total_scale = (self.font_size / self.units_per_em as f32) * bitmap_scale;
-        let scale = if (total_scale - 1.0).abs() < 0.00001 {
+        let is_pixel_perfect = (total_scale - 1.0).abs() < 0.00001;
+        let scale = if is_pixel_perfect {
             // Snap to exactly 1.0 for pixel-perfect rendering
             self.units_per_em as f32 / self.font_size
         } else {
             bitmap_scale
         };
 
-        self.transform()
+        let mut ts = self.transform()
             .pre_concat(Transform::from_scale(scale, scale))
             // The y value from skrifa's inner_bearing_y points to the top of the glyph.
             // We negate it to convert from font coordinates (y-up) to image coordinates (y-down).
-            .pre_translate(x, -y)
+            .pre_translate(x, -y);
+
+        // For pixel-perfect rendering (font_size == pixels_per_em), snap the translation
+        // to integer pixel boundaries. Proportional bitmap fonts have per-strike advances
+        // that differ from the single hmtx advance, so harfbuzz shaping produces fractional
+        // glyph positions that cause sub-pixel blurriness.
+        if is_pixel_perfect {
+            ts = Transform::from_row(ts.sx, ts.kx, ts.ky, ts.sy, ts.tx.round(), ts.ty.round());
+        }
+
+        ts
     }
 
     /// Returns the transform for the glyph, assuming that a sbix-based raster glyph
