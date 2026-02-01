@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git clone:*)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "Bash(cargo run:*)",
+      "Bash(cargo check:*)",
+      "Bash(cargo build:*)",
+      "Bash(RUST_LOG=debug ./target/release/resvg:*)",
+      "Bash(RUST_LOG=warn cargo run:*)",
+      "Bash(RUST_LOG=debug cargo run:*)",
+      "Bash(gh pr view:*)",
+      "Bash(ls:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:lib.rs)",
+      "Bash(cargo test:*)",
+      "Bash(RUST_LOG=debug cargo test:*)",
+      "Bash(RUST_LOG=usvg=debug cargo test:*)",
+      "Bash(find:*)",
+      "Bash(./target/release/resvg:*)",
+      "Bash(curl:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge-base:*)",
+      "Bash(git diff:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git add:*)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}

@@ -1467,6 +1467,30 @@ fn shape_text_with_font(
             let positions = output.glyph_positions();
             let infos = output.glyph_infos();
 
+            // Check if font has a bitmap strike at exactly this font size.
+            // If so, use bitmap advances instead of hmtx-based harfbuzz advances,
+            // since hmtx advances are derived from the largest strike and produce
+            // incorrect (non-integer) pixel positions at other ppem sizes.
+            let bitmap_advances: Option<HashMap<u32, i32>> = skrifa::FontRef::from_index(font_data, face_index)
+                .ok()
+                .and_then(|skrifa_font| {
+                    let strikes = skrifa_font.bitmap_strikes();
+                    let strike = strikes.iter().find(|s| (s.ppem() - font_size).abs() < 0.01)?;
+                    let units_per_em = font.units_per_em.get() as f32;
+                    let mut advances = HashMap::new();
+                    for i in 0..output.len() {
+                        let glyph_id = skrifa::GlyphId::new(infos[i].glyph_id);
+                        if let Some(bmp_glyph) = strike.get(glyph_id) {
+                            if let Some(bmp_advance) = bmp_glyph.advance {
+                                // Convert bitmap pixel advance to font units
+                                let fu_advance = (bmp_advance * units_per_em / font_size).round() as i32;
+                                advances.insert(infos[i].glyph_id, fu_advance);
+                            }
+                        }
+                    }
+                    if advances.is_empty() { None } else { Some(advances) }
+                });
+
             for i in 0usize..output.len() {
                 let pos = positions[i];
                 let info = infos[i];
@@ -1482,6 +1506,12 @@ fn shape_text_with_font(
                 .and_then(|last| infos.get(last))
                 .map_or(sub_text.len(), |info| info.cluster as usize);
 
+                // Use bitmap advance if available, otherwise harfbuzz advance
+                let width = bitmap_advances
+                    .as_ref()
+                    .and_then(|ba| ba.get(&info.glyph_id).copied())
+                    .unwrap_or(pos.x_advance);
+
                 glyphs.push(Glyph {
                     byte_idx: ByteIndex::new(idx),
                     cluster_len: end.checked_sub(start).unwrap_or_else(|| {
@@ -1492,7 +1522,7 @@ fn shape_text_with_font(
                     id: GlyphId::new(info.glyph_id as u32),
                     dx: pos.x_offset,
                     dy: pos.y_offset,
-                    width: pos.x_advance,
+                    width,
                     font: font.clone(),
                 });
             }
