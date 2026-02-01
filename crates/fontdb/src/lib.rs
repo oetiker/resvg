@@ -45,7 +45,7 @@
 use slotmap::SlotMap;
 use tinyvec::TinyVec;
 
-use skrifa::{FontRef, MetadataProvider, raw::FileRef, raw::TableProvider, string::StringId};
+use skrifa::{FontRef, MetadataProvider, bitmap::BitmapStrikes, raw::FileRef, raw::TableProvider, string::StringId};
 
 /// A font face language.
 ///
@@ -939,6 +939,11 @@ pub struct FaceInfo {
 
     /// Indicates that the font face is monospaced.
     pub monospaced: bool,
+
+    /// Available bitmap strike sizes (ppem values), sorted and deduplicated.
+    ///
+    /// Empty if the font has no embedded bitmap tables (EBLC/CBLC/sbix).
+    pub bitmap_strikes: Vec<u16>,
 }
 
 /// A font source.
@@ -1128,6 +1133,8 @@ fn parse_face_info(source: Source, data: &[u8], index: u32) -> Result<FaceInfo, 
         style = Style::Italic;
     }
 
+    let bitmap_strikes = parse_bitmap_strikes(&font);
+
     Ok(FaceInfo {
         id: ID::dummy(),
         source,
@@ -1138,7 +1145,23 @@ fn parse_face_info(source: Source, data: &[u8], index: u32) -> Result<FaceInfo, 
         weight,
         stretch,
         monospaced,
+        bitmap_strikes,
     })
+}
+
+/// Extract sorted, deduplicated bitmap strike ppem sizes from EBLC/CBLC/sbix tables.
+fn parse_bitmap_strikes(font: &FontRef) -> Vec<u16> {
+    let strikes = BitmapStrikes::new(font);
+    if strikes.is_empty() {
+        return Vec::new();
+    }
+    let mut sizes: Vec<u16> = (0..strikes.len())
+        .filter_map(|i| strikes.get(i))
+        .map(|s| s.ppem() as u16)
+        .collect();
+    sizes.sort_unstable();
+    sizes.dedup();
+    sizes
 }
 
 fn parse_names(font: &FontRef) -> Option<(Vec<(String, Language)>, String)> {
