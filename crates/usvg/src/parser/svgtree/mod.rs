@@ -690,6 +690,11 @@ impl AId {
                 | AId::BaselineShift
                 | AId::BackgroundColor // non-standard SVG attribute
                 | AId::ResvgHinting // non-standard SVG attribute
+                | AId::ResvgHintingEngine // non-standard SVG attribute
+                | AId::ResvgHintingMode // non-standard SVG attribute
+                | AId::ResvgHintingPreserveLinearMetrics // non-standard SVG attribute
+                | AId::ResvgHintingSymmetric // non-standard SVG attribute
+                | AId::ResvgHintingTarget // non-standard SVG attribute
                 | AId::ClipPath
                 | AId::ClipRule
                 | AId::Color
@@ -1039,8 +1044,44 @@ impl<'a, 'input: 'a> FromValue<'a, 'input> for crate::TextHinting {
         match value {
             "auto" => Some(crate::TextHinting::Auto),
             "none" => Some(crate::TextHinting::None),
-            "smooth" => Some(crate::TextHinting::Smooth),
-            "mono" => Some(crate::TextHinting::Mono),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "text")]
+impl<'a, 'input: 'a> FromValue<'a, 'input> for crate::HintingEngine {
+    fn parse(_: SvgNode, _: AId, value: &str) -> Option<Self> {
+        match value {
+            // The engine reading the hints in the font is commonly called the
+            // native one, as opposed to the automatic hinter.
+            "native" => Some(crate::HintingEngine::Interpreter),
+            "auto" => Some(crate::HintingEngine::Auto),
+            "auto-fallback" => Some(crate::HintingEngine::AutoFallback),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "text")]
+impl<'a, 'input: 'a> FromValue<'a, 'input> for crate::HintingTargetKind {
+    fn parse(_: SvgNode, _: AId, value: &str) -> Option<Self> {
+        match value {
+            "mono" => Some(crate::HintingTargetKind::Mono),
+            "smooth" => Some(crate::HintingTargetKind::Smooth),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "text")]
+impl<'a, 'input: 'a> FromValue<'a, 'input> for crate::SmoothMode {
+    fn parse(_: SvgNode, _: AId, value: &str) -> Option<Self> {
+        match value {
+            "normal" => Some(crate::SmoothMode::Normal),
+            "light" => Some(crate::SmoothMode::Light),
+            "lcd" => Some(crate::SmoothMode::Lcd),
+            "vertical-lcd" => Some(crate::SmoothMode::VerticalLcd),
             _ => None,
         }
     }

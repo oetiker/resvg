@@ -15,8 +15,10 @@ This changelog also contains important changes in dependencies.
   while hinting is not. Elements with `text-rendering="geometricPrecision"` are never
   hinted, and neither are those with `-resvg-hinting: none`. The `usvg` and `resvg` CLIs
   gained a `--hinting` flag.
-- A non-standard `-resvg-hinting` CSS property, which selects how an element is hinted
-  (`auto`, `none`, `smooth` or `mono`) when the host enabled hinting.
+- Non-standard `-resvg-hinting`, `-resvg-hinting-engine`, `-resvg-hinting-target`,
+  `-resvg-hinting-mode`, `-resvg-hinting-symmetric` and
+  `-resvg-hinting-preserve-linear-metrics` CSS properties, which adjust how an element is
+  hinted when the host enabled hinting.
 
 ## [0.48.1] 2026-08-02
 

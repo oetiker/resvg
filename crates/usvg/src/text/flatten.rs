@@ -91,11 +91,7 @@ fn push_outline_paths(
     }
 }
 
-pub(crate) fn flatten(
-    text: &mut Text,
-    cache: &mut Cache,
-    hinting: Option<HintingOptions>,
-) -> Option<(Group, NonZeroRect)> {
+pub(crate) fn flatten(text: &mut Text, cache: &mut Cache) -> Option<(Group, NonZeroRect)> {
     let mut new_children = vec![];
 
     let abs_transform = text.abs_transform;
@@ -105,7 +101,7 @@ pub(crate) fn flatten(
     // of what hinting does.
     let hinting = match text.rendering_mode {
         TextRendering::GeometricPrecision => None,
-        _ => text.hinting.resolve(hinting),
+        _ => text.hinting,
     };
 
     for span in &text.layouted {

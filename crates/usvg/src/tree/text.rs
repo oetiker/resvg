@@ -577,7 +577,7 @@ pub struct Text {
     pub(crate) id: String,
     pub(crate) rendering_mode: TextRendering,
     #[cfg(feature = "text")]
-    pub(crate) hinting: crate::TextHinting,
+    pub(crate) hinting: Option<crate::HintingOptions>,
     pub(crate) dx: Vec<f32>,
     pub(crate) dy: Vec<f32>,
     pub(crate) rotate: Vec<f32>,
@@ -610,9 +610,9 @@ impl Text {
         self.rendering_mode
     }
 
-    /// How this element should be hinted.
+    /// How this element should be hinted, if at all.
     #[cfg(feature = "text")]
-    pub fn hinting(&self) -> crate::TextHinting {
+    pub fn hinting(&self) -> Option<crate::HintingOptions> {
         self.hinting
     }
 

@@ -1,4 +1,9 @@
 -resvg-hinting
+-resvg-hinting-engine
+-resvg-hinting-mode
+-resvg-hinting-preserve-linear-metrics
+-resvg-hinting-symmetric
+-resvg-hinting-target
 alignment-baseline
 amplitude
 azimuth
