@@ -143,3 +143,54 @@ impl From<HintingOptions> for skrifa::outline::HintingOptions {
         }
     }
 }
+
+/// Per element hinting control.
+///
+/// Corresponds to the non-standard `-resvg-hinting` CSS property, which can be
+/// set from a stylesheet or a `style` attribute, and is inherited like the other
+/// text properties. It is not available as an XML attribute, since an attribute
+/// name cannot start with a dash.
+///
+/// A document can only choose between the ways of hinting that the host has
+/// allowed. When [`Options::hinting`](crate::Options::hinting) is `None`, none
+/// of these values have any effect, so a document cannot force hinting on a
+/// host that wants resolution independent output.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub enum TextHinting {
+    /// Hint as configured by [`Options::hinting`](crate::Options::hinting).
+    #[default]
+    Auto,
+    /// Do not hint, keeping the exact outlines.
+    ///
+    /// `text-rendering="geometricPrecision"` has the same effect.
+    None,
+    /// Hint with a [`HintingTarget::Smooth`] target, keeping the mode and the
+    /// flags of the configured target.
+    Smooth,
+    /// Hint with a [`HintingTarget::Mono`] target.
+    Mono,
+}
+
+impl TextHinting {
+    /// Applies this override to the configured options.
+    pub(crate) fn resolve(self, options: Option<HintingOptions>) -> Option<HintingOptions> {
+        let options = options?;
+        match self {
+            Self::Auto => Some(options),
+            Self::None => None,
+            Self::Mono => Some(HintingOptions {
+                target: HintingTarget::Mono,
+                ..options
+            }),
+            Self::Smooth => {
+                // Keep the configured smooth settings, and fall back to the
+                // defaults when a mono target was configured.
+                let target = match options.target {
+                    smooth @ HintingTarget::Smooth { .. } => smooth,
+                    HintingTarget::Mono => HintingTarget::default(),
+                };
+                Some(HintingOptions { target, ..options })
+            }
+        }
+    }
+}

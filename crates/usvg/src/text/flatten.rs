@@ -105,7 +105,7 @@ pub(crate) fn flatten(
     // of what hinting does.
     let hinting = match text.rendering_mode {
         TextRendering::GeometricPrecision => None,
-        _ => hinting,
+        _ => text.hinting.resolve(hinting),
     };
 
     for span in &text.layouted {

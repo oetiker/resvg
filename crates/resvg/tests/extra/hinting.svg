@@ -1,6 +1,10 @@
-<svg viewBox="0 0 200 100" width="200" height="100" xmlns="http://www.w3.org/2000/svg"
+<svg viewBox="0 0 200 140" width="200" height="140" xmlns="http://www.w3.org/2000/svg"
      font-family="Noto Sans">
-    <title>Text at the sizes where hinting matters</title>
+    <title>Text at the sizes where hinting matters, and the per element control</title>
+
+    <style>
+        .unhinted { -resvg-hinting: none }
+    </style>
 
     <text x="10" y="20" font-size="9">Hamburgefonstiv 9</text>
     <text x="10" y="40" font-size="12">Hamburgefonstiv 12</text>
@@ -8,4 +12,8 @@
 
     <!-- `geometricPrecision` opts out of hinting. -->
     <text x="10" y="86" font-size="12" text-rendering="geometricPrecision">Exact outlines 12</text>
+
+    <!-- So does `-resvg-hinting`, from a stylesheet or a `style` attribute. -->
+    <text x="10" y="105" font-size="12" class="unhinted">Not hinted 12</text>
+    <text x="10" y="122" font-size="12" style="-resvg-hinting: mono">Mono hinted 12</text>
 </svg>

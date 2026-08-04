@@ -689,6 +689,7 @@ impl AId {
             AId::AlignmentBaseline
                 | AId::BaselineShift
                 | AId::BackgroundColor // non-standard SVG attribute
+                | AId::ResvgHinting // non-standard SVG attribute
                 | AId::ClipPath
                 | AId::ClipRule
                 | AId::Color
@@ -1027,6 +1028,19 @@ impl<'a, 'input: 'a> FromValue<'a, 'input> for TextRendering {
             "optimizeSpeed" => Some(TextRendering::OptimizeSpeed),
             "auto" | "optimizeLegibility" => Some(TextRendering::OptimizeLegibility),
             "geometricPrecision" => Some(TextRendering::GeometricPrecision),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "text")]
+impl<'a, 'input: 'a> FromValue<'a, 'input> for crate::TextHinting {
+    fn parse(_: SvgNode, _: AId, value: &str) -> Option<Self> {
+        match value {
+            "auto" => Some(crate::TextHinting::Auto),
+            "none" => Some(crate::TextHinting::None),
+            "smooth" => Some(crate::TextHinting::Smooth),
+            "mono" => Some(crate::TextHinting::Mono),
             _ => None,
         }
     }

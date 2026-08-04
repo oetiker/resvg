@@ -576,6 +576,8 @@ pub enum WritingMode {
 pub struct Text {
     pub(crate) id: String,
     pub(crate) rendering_mode: TextRendering,
+    #[cfg(feature = "text")]
+    pub(crate) hinting: crate::TextHinting,
     pub(crate) dx: Vec<f32>,
     pub(crate) dy: Vec<f32>,
     pub(crate) rotate: Vec<f32>,
@@ -606,6 +608,12 @@ impl Text {
     /// `text-rendering` in SVG.
     pub fn rendering_mode(&self) -> TextRendering {
         self.rendering_mode
+    }
+
+    /// How this element should be hinted.
+    #[cfg(feature = "text")]
+    pub fn hinting(&self) -> crate::TextHinting {
+        self.hinting
     }
 
     /// A relative X axis offsets.

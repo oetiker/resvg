@@ -17,7 +17,7 @@ mod hinting;
 /// Provides access to the layout of a text node.
 pub mod layout;
 
-pub use hinting::{HintingEngine, HintingOptions, HintingTarget, SmoothMode};
+pub use hinting::{HintingEngine, HintingOptions, HintingTarget, SmoothMode, TextHinting};
 
 /// The optical sizing variation axis tag.
 pub(crate) const OPSZ: skrifa::Tag = skrifa::Tag::from_be_bytes(*b"opsz");

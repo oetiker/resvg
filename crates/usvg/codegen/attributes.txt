@@ -1,3 +1,4 @@
+-resvg-hinting
 alignment-baseline
 amplitude
 azimuth

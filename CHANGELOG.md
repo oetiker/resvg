@@ -13,7 +13,10 @@ This changelog also contains important changes in dependencies.
 - Optional font hinting via `Options::hinting`, which grid-fits glyph outlines so that
   stems align to whole pixels. Disabled by default, since an SVG is resolution independent
   while hinting is not. Elements with `text-rendering="geometricPrecision"` are never
-  hinted. The `usvg` and `resvg` CLIs gained a `--hinting` flag.
+  hinted, and neither are those with `-resvg-hinting: none`. The `usvg` and `resvg` CLIs
+  gained a `--hinting` flag.
+- A non-standard `-resvg-hinting` CSS property, which selects how an element is hinted
+  (`auto`, `none`, `smooth` or `mono`) when the host enabled hinting.
 
 ## [0.48.1] 2026-08-02
 

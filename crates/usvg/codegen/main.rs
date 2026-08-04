@@ -172,8 +172,13 @@ fn gen_map(
 // some-string -> SomeString
 // some_string -> SomeString
 // some:string -> SomeString
+// -some-string -> SomeString
 // 100 -> N100
 fn to_enum_name(name: &str) -> String {
+    // A vendor prefixed name starts with a dash, which cannot be part of an
+    // identifier.
+    let name = name.strip_prefix('-').unwrap_or(name);
+
     let mut change_case = false;
     let mut s = String::with_capacity(name.len());
     for (idx, c) in name.chars().enumerate() {
