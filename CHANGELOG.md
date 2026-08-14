@@ -15,6 +15,10 @@ This changelog also contains important changes in dependencies.
   bitmap glyphs were rendered. Mask glyphs are painted with the text fill color and are
   drawn without interpolation, and a monochrome strike is only used at the size it was
   drawn for, leaving the other sizes to the outline.
+- Optional font hinting via `Options::font_hinting`, which grid-fits glyph outlines so that
+  stems align to whole pixels. Disabled by default, since an SVG is resolution independent
+  while hinting is not. Elements with `text-rendering="geometricPrecision"` are never
+  hinted. The `usvg` and `resvg` CLIs gained a `--font-hinting` flag.
 
 ## [0.48.1] 2026-08-02
 
