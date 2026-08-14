@@ -14,6 +14,10 @@ This changelog also contains important changes in dependencies.
   stems align to whole pixels. Disabled by default, since an SVG is resolution independent
   while hinting is not. Elements with `text-rendering="geometricPrecision"` are never
   hinted. The `usvg` and `resvg` CLIs gained a `--font-hinting` flag.
+- `FontResolver::select_hinting`, which picks the hinting configuration per font rather
+  than per document. A document mixing a bitmap font with a variable font can hint each
+  the way it needs, and because hinting is resolved after font fallback, a run that falls
+  back mid-way gets the configuration of the font that actually supplied each glyph.
 
 ## [0.48.1] 2026-08-02
 
