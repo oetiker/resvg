@@ -23,6 +23,9 @@ This changelog also contains important changes in dependencies.
   than per document. A document mixing a bitmap font with a variable font can hint each
   the way it needs, and because hinting is resolved after font fallback, a run that falls
   back mid-way gets the configuration of the font that actually supplied each glyph.
+- `FontResolver::select_bitmap`, which decides per font whether its embedded bitmap strikes
+  may be used. Declining them sends the glyph to the outline, which is also what makes the
+  font hintable: a strike is an image, so there is no outline for hinting to grid-fit.
 
 ## [0.48.1] 2026-08-02
 

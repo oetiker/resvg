@@ -15,6 +15,7 @@ use usvg::fontdb;
 mod render;
 
 mod extra;
+mod bitmap;
 mod hinting;
 
 const IMAGE_SIZE: u32 = 300;
@@ -64,6 +65,23 @@ pub fn render_with_hinting_resolver(
         TestMode::Normal,
         hinting,
         Some(select_hinting),
+        None,
+    )
+}
+
+/// Renders with a per-font bitmap strike selector installed.
+pub fn render_with_bitmap_selector(
+    name: &str,
+    reference: &str,
+    select_bitmap: usvg::BitmapSelectionFn<'static>,
+) -> usize {
+    render_inner_full(
+        name,
+        reference,
+        TestMode::Normal,
+        None,
+        None,
+        Some(select_bitmap),
     )
 }
 
@@ -93,7 +111,7 @@ pub fn render_inner_with_ref(
     test_mode: TestMode,
     hinting: Option<usvg::FontHintingOptions>,
 ) -> usize {
-    render_inner_full(name, reference, test_mode, hinting, None)
+    render_inner_full(name, reference, test_mode, hinting, None, None)
 }
 
 pub fn render_inner_full(
@@ -102,6 +120,7 @@ pub fn render_inner_full(
     test_mode: TestMode,
     hinting: Option<usvg::FontHintingOptions>,
     select_hinting: Option<usvg::HintingSelectionFn<'static>>,
+    select_bitmap: Option<usvg::BitmapSelectionFn<'static>>,
 ) -> usize {
     let svg_path = format!("tests/{}.svg", name);
     let png_path = format!("tests/{}.png", reference);
@@ -110,6 +129,9 @@ pub fn render_inner_full(
     let mut font_resolver = usvg::FontResolver::default();
     if let Some(select_hinting) = select_hinting {
         font_resolver.select_hinting = select_hinting;
+    }
+    if let Some(select_bitmap) = select_bitmap {
+        font_resolver.select_bitmap = select_bitmap;
     }
 
     let opt = usvg::Options {

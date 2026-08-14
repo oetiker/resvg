@@ -95,6 +95,7 @@ pub(crate) fn flatten(
     cache: &mut Cache,
     hinting: Option<FontHintingOptions>,
     select_hinting: &crate::HintingSelectionFn,
+    select_bitmap: &crate::BitmapSelectionFn,
 ) -> Option<(Group, NonZeroRect)> {
     let mut new_children = vec![];
 
@@ -176,14 +177,19 @@ pub(crate) fn flatten(
 
                 new_children.push(Node::Group(Box::new(group)));
             }
-            // A bitmap glyph.
-            else if let Some(img) = cache.fontdb_raster(bitmap::BitmapGlyphKey::new(
-                glyph.font,
-                glyph.id,
-                glyph.font_size(),
-                mask_color,
-                mask_opacity,
-            )) {
+            // A bitmap glyph, unless the host would rather have the outline.
+            else if let Some(img) = select_bitmap(glyph.font, glyph.font_size(), &cache.fontdb)
+                .then(|| {
+                    cache.fontdb_raster(bitmap::BitmapGlyphKey::new(
+                        glyph.font,
+                        glyph.id,
+                        glyph.font_size(),
+                        mask_color,
+                        mask_opacity,
+                    ))
+                })
+                .flatten()
+            {
                 push_outline_paths(
                     span,
                     &mut span_builder,

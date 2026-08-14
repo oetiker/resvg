@@ -92,6 +92,22 @@ pub type HintingSelectionFn<'a> = Box<
         + 'a,
 >;
 
+/// A shorthand for [FontResolver]'s bitmap strike selection function.
+///
+/// This function receives a resolved font, the size it is rendered at in user
+/// units, and a font database. It returns whether the font's embedded bitmap
+/// strikes may be used at that size. Returning `false` sends the glyph to the
+/// outline instead.
+///
+/// Hinting has no say here: a strike is an image, so there is no outline to
+/// grid-fit. Choosing the outline is what makes a font hintable at all.
+///
+/// The default implementation allows strikes for every font, which is the
+/// behaviour of a resolver that is never set. Note that a strike is only used
+/// at a size it was actually drawn for regardless of this function; the rest
+/// fall back to the outline anyway.
+pub type BitmapSelectionFn<'a> = Box<dyn Fn(ID, f32, &Database) -> bool + Send + Sync + 'a>;
+
 /// A font resolver for `<text>` elements.
 ///
 /// This type can be useful if you want to have an alternative font handling to
@@ -111,6 +127,10 @@ pub struct FontResolver<'a> {
     /// Resolver function that will be used when selecting the hinting
     /// configuration for a font.
     pub select_hinting: HintingSelectionFn<'a>,
+
+    /// Resolver function that will be used when deciding whether a font's
+    /// bitmap strikes may be used.
+    pub select_bitmap: BitmapSelectionFn<'a>,
 }
 
 impl Default for FontResolver<'_> {
@@ -119,6 +139,7 @@ impl Default for FontResolver<'_> {
             select_font: FontResolver::default_font_selector(),
             select_fallback: FontResolver::default_fallback_selector(),
             select_hinting: FontResolver::default_hinting_selector(),
+            select_bitmap: FontResolver::default_bitmap_selector(),
         }
     }
 }
@@ -196,6 +217,13 @@ impl FontResolver<'_> {
         Box::new(|_, _, global, _| global)
     }
 
+    /// Creates a default bitmap strike selection resolver.
+    ///
+    /// The default implementation allows every font's strikes to be used.
+    pub fn default_bitmap_selector() -> BitmapSelectionFn<'static> {
+        Box::new(|_, _, _| true)
+    }
+
     /// Creates a default font fallback selection resolver.
     ///
     /// The default implementation searches through the entire `fontdb`
@@ -268,7 +296,13 @@ pub(crate) fn convert(
     text.bounding_box = bbox.to_rect();
     text.abs_bounding_box = bbox.transform(text.abs_transform)?.to_rect();
 
-    let (group, stroke_bbox) = flatten::flatten(text, cache, hinting, &resolver.select_hinting)?;
+    let (group, stroke_bbox) = flatten::flatten(
+        text,
+        cache,
+        hinting,
+        &resolver.select_hinting,
+        &resolver.select_bitmap,
+    )?;
     text.flattened = Box::new(group);
     text.stroke_bounding_box = stroke_bbox.to_rect();
     text.abs_stroke_bounding_box = stroke_bbox.transform(text.abs_transform)?.to_rect();

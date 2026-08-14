@@ -151,6 +151,9 @@ impl crate::Tree {
                 select_hinting: Box::new(|font, size, global, db| {
                     (opt.font_resolver.select_hinting)(font, size, global, db)
                 }),
+                select_bitmap: Box::new(|font, size, db| {
+                    (opt.font_resolver.select_bitmap)(font, size, db)
+                }),
             },
             ..Options::default()
         };
