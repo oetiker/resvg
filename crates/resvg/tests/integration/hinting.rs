@@ -105,6 +105,50 @@ fn resolver_hints_the_family_it_names() {
     );
 }
 
+// A bitmap strike and a hinted outline in one document. Hinting grid-fits
+// outlines, so it has nothing to say about a glyph that arrives as an image —
+// these pin that down rather than leaving it to be discovered.
+
+#[test]
+fn hinting_changes_the_outline_font_in_a_mixed_document() {
+    assert_eq!(
+        render_hinted("tests/text/hinting/mixed-fonts", "mono", mono()),
+        0
+    );
+}
+
+#[test]
+fn hinting_only_the_bitmap_font_leaves_the_document_unhinted() {
+    // `Bitmap Mono` is drawn from its 16px strike here, so asking for hinting
+    // on it has to be indistinguishable from asking for none at all.
+    assert_eq!(
+        render_with_hinting_resolver(
+            "tests/text/hinting/mixed-fonts",
+            "tests/text/hinting/mixed-fonts",
+            None,
+            Box::new(|id, _, _, db| is_family(db, id, "Bitmap Mono").then(mono)),
+        ),
+        0
+    );
+}
+
+#[test]
+fn declining_the_bitmap_font_matches_hinting_everything() {
+    // The mirror image: hinting every font and hinting all but the bitmap one
+    // have to agree, because the bitmap font was never affected either way.
+    assert_eq!(
+        render_with_hinting_resolver(
+            "tests/text/hinting/mixed-fonts",
+            "tests/text/hinting/mixed-fonts-mono",
+            Some(mono()),
+            Box::new(|id, _, global, db| (!is_family(db, id, "Bitmap Mono"))
+                .then_some(global)
+                .flatten()),
+        ),
+        0
+    );
+}
+
 #[test]
 fn resolver_leaves_families_it_does_not_name_unhinted() {
     assert_eq!(

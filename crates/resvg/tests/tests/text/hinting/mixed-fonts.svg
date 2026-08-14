@@ -1,0 +1,16 @@
+<svg id="svg1" viewBox="0 0 300 100" xmlns="http://www.w3.org/2000/svg">
+    <title>A bitmap strike and a hinted outline in the same document</title>
+
+    <!-- The viewBox is as wide as the rendered test image, so that both the
+         strike and the hinted outlines land on the pixel grid they expect. -->
+
+    <!-- Drawn from the 16px `EBDT` strike, which hinting cannot alter: the
+         glyph is an image, not an outline. -->
+    <text id="text1" x="20" y="30" font-family="Bitmap Mono" font-size="16">Bitmap 16</text>
+
+    <!-- An outline, at a size where hinting changes the result. -->
+    <text id="text2" x="20" y="60" font-family="Noto Sans" font-size="12">Hamburgefonstiv 12</text>
+
+    <!-- image frame -->
+    <rect id="frame" x="1" y="1" width="298" height="98" fill="none" stroke="black"/>
+</svg>
