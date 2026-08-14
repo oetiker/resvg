@@ -148,6 +148,9 @@ impl crate::Tree {
                 select_fallback: Box::new(|c, used_fonts, db| {
                     (opt.font_resolver.select_fallback)(c, used_fonts, db)
                 }),
+                select_hinting: Box::new(|font, size, global, db| {
+                    (opt.font_resolver.select_hinting)(font, size, global, db)
+                }),
             },
             ..Options::default()
         };

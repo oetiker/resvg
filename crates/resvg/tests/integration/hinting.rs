@@ -5,7 +5,22 @@
 // these render the same file the auto-generated `text_hinting_sizes` test uses,
 // once per configuration.
 
-use crate::render_hinted;
+use crate::{render_hinted, render_with_hinting_resolver};
+
+/// The configuration `sizes-mono.png` was rendered with.
+fn mono() -> usvg::FontHintingOptions {
+    usvg::FontHintingOptions {
+        engine: usvg::FontHintingEngine::Auto,
+        target: usvg::FontHintingTarget::Mono,
+    }
+}
+
+/// True when the face belongs to the family the test file asks for.
+fn is_family(db: &usvg::fontdb::Database, id: usvg::fontdb::ID, family: &str) -> bool {
+    db.face(id)
+        .map(|face| face.families.iter().any(|(name, _)| name == family))
+        .unwrap_or(false)
+}
 
 #[test]
 fn smooth() {
@@ -38,6 +53,67 @@ fn autohinter_mono() {
     };
     assert_eq!(
         render_hinted("tests/text/hinting/sizes", "mono", hinting),
+        0
+    );
+}
+
+// The resolver lets a host pick hinting per font. These check it against the
+// references the global setting already produces: turning hinting off for every
+// font has to match the unhinted rendering, and turning it on has to match the
+// globally hinted one.
+
+#[test]
+fn resolver_declining_every_font_matches_unhinted() {
+    assert_eq!(
+        render_with_hinting_resolver(
+            "tests/text/hinting/sizes",
+            "tests/text/hinting/sizes",
+            Some(mono()),
+            Box::new(|_, _, _, _| None),
+        ),
+        0
+    );
+}
+
+#[test]
+fn resolver_passing_the_global_through_matches_global_hinting() {
+    assert_eq!(
+        render_with_hinting_resolver(
+            "tests/text/hinting/sizes",
+            "tests/text/hinting/sizes-mono",
+            Some(mono()),
+            Box::new(|_, _, global, _| global),
+        ),
+        0
+    );
+}
+
+// The pair below is the point of the feature: the same resolver, keyed on a
+// different family, has to produce opposite results. The global is off in both,
+// so any hinting can only have come from the resolver.
+
+#[test]
+fn resolver_hints_the_family_it_names() {
+    assert_eq!(
+        render_with_hinting_resolver(
+            "tests/text/hinting/sizes",
+            "tests/text/hinting/sizes-mono",
+            None,
+            Box::new(|id, _, _, db| is_family(db, id, "Noto Sans").then(mono)),
+        ),
+        0
+    );
+}
+
+#[test]
+fn resolver_leaves_families_it_does_not_name_unhinted() {
+    assert_eq!(
+        render_with_hinting_resolver(
+            "tests/text/hinting/sizes",
+            "tests/text/hinting/sizes",
+            None,
+            Box::new(|id, _, _, db| is_family(db, id, "Some Other Family").then(mono)),
+        ),
         0
     );
 }

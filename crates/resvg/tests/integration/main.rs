@@ -49,6 +49,24 @@ pub fn render_hinted(name: &str, variant: &str, hinting: usvg::FontHintingOption
     )
 }
 
+/// Renders with a per-font hinting resolver installed, comparing against an
+/// explicitly named reference so a test can assert it reproduces the unhinted
+/// or the globally hinted rendering.
+pub fn render_with_hinting_resolver(
+    name: &str,
+    reference: &str,
+    hinting: Option<usvg::FontHintingOptions>,
+    select_hinting: usvg::HintingSelectionFn<'static>,
+) -> usize {
+    render_inner_full(
+        name,
+        reference,
+        TestMode::Normal,
+        hinting,
+        Some(select_hinting),
+    )
+}
+
 pub fn render_extra_with_scale(name: &str, scale: f32) -> usize {
     render_inner(name, TestMode::Extra(scale), None)
 }
@@ -75,13 +93,29 @@ pub fn render_inner_with_ref(
     test_mode: TestMode,
     hinting: Option<usvg::FontHintingOptions>,
 ) -> usize {
+    render_inner_full(name, reference, test_mode, hinting, None)
+}
+
+pub fn render_inner_full(
+    name: &str,
+    reference: &str,
+    test_mode: TestMode,
+    hinting: Option<usvg::FontHintingOptions>,
+    select_hinting: Option<usvg::HintingSelectionFn<'static>>,
+) -> usize {
     let svg_path = format!("tests/{}.svg", name);
     let png_path = format!("tests/{}.png", reference);
     let make_ref = std::env::var("MAKE_REF").is_ok();
 
+    let mut font_resolver = usvg::FontResolver::default();
+    if let Some(select_hinting) = select_hinting {
+        font_resolver.select_hinting = select_hinting;
+    }
+
     let opt = usvg::Options {
         fontdb: GLOBAL_FONTDB.clone(),
         font_hinting: hinting,
+        font_resolver,
         resources_dir: Some(
             std::path::PathBuf::from(&svg_path)
                 .parent()

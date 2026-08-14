@@ -94,6 +94,7 @@ pub(crate) fn flatten(
     text: &mut Text,
     cache: &mut Cache,
     hinting: Option<FontHintingOptions>,
+    select_hinting: &crate::HintingSelectionFn,
 ) -> Option<(Group, NonZeroRect)> {
     let mut new_children = vec![];
 
@@ -101,11 +102,9 @@ pub(crate) fn flatten(
     let rendering_mode = resolve_rendering_mode(text);
 
     // `geometricPrecision` asks for the exact outlines, which is the opposite
-    // of what hinting does.
-    let hinting = match text.rendering_mode {
-        TextRendering::GeometricPrecision => None,
-        _ => hinting,
-    };
+    // of what hinting does. The resolver is not consulted for it either: a spec
+    // property outranks a host hook.
+    let hintable = !matches!(text.rendering_mode, TextRendering::GeometricPrecision);
 
     for span in &text.layouted {
         if let Some(path) = span.overline.as_ref() {
@@ -215,10 +214,13 @@ pub(crate) fn flatten(
 
                 new_children.push(Node::Group(Box::new(group)));
             } else {
-                let hinting = hinting.map(|options| GlyphHinting {
-                    options,
-                    ppem: glyph.font_size(),
-                });
+                // Resolved per glyph, since the resolver keys on the font that
+                // actually supplied it, which fallback may have changed.
+                let ppem = glyph.font_size();
+                let hinting = hintable
+                    .then(|| select_hinting(glyph.font, ppem, hinting, &cache.fontdb))
+                    .flatten()
+                    .map(|options| GlyphHinting { options, ppem });
                 let outline = cache.fontdb_outline(glyph.font, glyph.id, &variations, hinting);
 
                 if let Some(outline) = outline.and_then(|p| p.transform(glyph.outline_transform()))

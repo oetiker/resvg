@@ -70,6 +70,28 @@ pub type FontSelectionFn<'a> =
 pub type FallbackSelectionFn<'a> =
     Box<dyn Fn(char, &[ID], &mut Arc<Database>) -> Option<ID> + Send + Sync + 'a>;
 
+/// A shorthand for [FontResolver]'s hinting selection function.
+///
+/// This function receives a resolved font, the size it is rendered at in user
+/// units, the global [`Options::font_hinting`](crate::Options::font_hinting),
+/// and a font database. It returns the hinting configuration to use for that
+/// font, or `None` to leave it unhinted.
+///
+/// Hinting is applied per glyph, after font fallback has been resolved, so a
+/// document that falls back from one font to another gets the configuration
+/// belonging to whichever font actually supplied each glyph.
+///
+/// The default implementation returns the global setting unchanged, which makes
+/// every font behave as [`Options::font_hinting`](crate::Options::font_hinting)
+/// asks. Elements with `text-rendering="geometricPrecision"` are never hinted
+/// and never reach this function.
+pub type HintingSelectionFn<'a> = Box<
+    dyn Fn(ID, f32, Option<FontHintingOptions>, &Database) -> Option<FontHintingOptions>
+        + Send
+        + Sync
+        + 'a,
+>;
+
 /// A font resolver for `<text>` elements.
 ///
 /// This type can be useful if you want to have an alternative font handling to
@@ -85,6 +107,10 @@ pub struct FontResolver<'a> {
     /// Resolver function that will be used when selecting a fallback font for a
     /// character.
     pub select_fallback: FallbackSelectionFn<'a>,
+
+    /// Resolver function that will be used when selecting the hinting
+    /// configuration for a font.
+    pub select_hinting: HintingSelectionFn<'a>,
 }
 
 impl Default for FontResolver<'_> {
@@ -92,6 +118,7 @@ impl Default for FontResolver<'_> {
         FontResolver {
             select_font: FontResolver::default_font_selector(),
             select_fallback: FontResolver::default_fallback_selector(),
+            select_hinting: FontResolver::default_hinting_selector(),
         }
     }
 }
@@ -158,6 +185,15 @@ impl FontResolver<'_> {
 
             id
         })
+    }
+
+    /// Creates a default hinting selection resolver.
+    ///
+    /// The default implementation applies the global
+    /// [`Options::font_hinting`](crate::Options::font_hinting) to every font,
+    /// so hinting behaves exactly as it does without a resolver.
+    pub fn default_hinting_selector() -> HintingSelectionFn<'static> {
+        Box::new(|_, _, global, _| global)
     }
 
     /// Creates a default font fallback selection resolver.
@@ -232,7 +268,7 @@ pub(crate) fn convert(
     text.bounding_box = bbox.to_rect();
     text.abs_bounding_box = bbox.transform(text.abs_transform)?.to_rect();
 
-    let (group, stroke_bbox) = flatten::flatten(text, cache, hinting)?;
+    let (group, stroke_bbox) = flatten::flatten(text, cache, hinting, &resolver.select_hinting)?;
     text.flattened = Box::new(group);
     text.stroke_bounding_box = stroke_bbox.to_rect();
     text.abs_stroke_bounding_box = stroke_bbox.transform(text.abs_transform)?.to_rect();
