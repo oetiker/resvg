@@ -176,6 +176,51 @@ fn bgra_to_png(data: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
     encode_rgba_png(&rgba, width, height)
 }
 
+/// The mask strike that will be used for `glyph_id` at `font_size`, if any.
+///
+/// A mask is one size specific rendering of the design the outline already
+/// describes, so it is only used at the size it was drawn for — see [`glyph`],
+/// which this has to agree with, or layout would space a glyph for a strike
+/// that is never drawn.
+fn matching_mask<'a>(
+    font: &skrifa::FontRef<'a>,
+    glyph_id: GlyphId,
+    font_size: f32,
+) -> Option<skrifa::bitmap::BitmapGlyph<'a>> {
+    let strikes = font.bitmap_strikes();
+
+    // The largest available image tells us what kind of strike this font has.
+    let unscaled = strikes.glyph_for_size(skrifa::prelude::Size::unscaled(), glyph_id.into())?;
+    if !matches!(unscaled.data, BitmapData::Mask(_)) {
+        return None;
+    }
+
+    strikes
+        .glyph_for_size(skrifa::prelude::Size::new(font_size), glyph_id.into())
+        .filter(|image| image.ppem_y == font_size)
+}
+
+/// The advance width, in pixels, that the strike itself gives for a glyph — or
+/// `None` where no strike is used and the outline's advance stands.
+///
+/// A strike carries its own metrics, drawn in whole pixels for its own pixel
+/// size, and they are not the outline's metrics scaled: a pixel font is drawn
+/// per size, so the two only agree at the one size the outline was fitted to.
+/// Spacing bitmap glyphs by the outline's advance is therefore wrong twice
+/// over — the glyphs sit at the wrong distance from each other, and, because a
+/// scaled advance is rarely a whole number of pixels, every glyph after the
+/// first lands between pixels, where the strike cannot be reproduced.
+pub(crate) fn mask_advance(
+    font: &skrifa::FontRef,
+    glyph_id: GlyphId,
+    font_size: f32,
+) -> Option<f32> {
+    // A glyph with no outline at all keeps whatever strike it has, at any
+    // size, so its image is scaled and its advance is not this one.
+    font.outline_glyphs().get(glyph_id.into())?;
+    matching_mask(font, glyph_id, font_size)?.advance
+}
+
 /// Looks up a bitmap glyph and converts it into an image.
 ///
 /// Returns `None` when the glyph should be drawn from its outline instead.
@@ -204,11 +249,7 @@ pub(crate) fn glyph(fontdb: &Database, key: BitmapGlyphKey) -> Option<BitmapImag
         // fallback for renderers without sbix support, so treating the outline
         // as the better choice would invert what the font intends.
         let image = if matches!(image.data, BitmapData::Mask(_)) {
-            let matching = bitmap_strikes
-                .glyph_for_size(skrifa::prelude::Size::new(font_size), glyph_id.into())
-                .filter(|image| image.ppem_y == font_size);
-
-            match matching {
+            match matching_mask(&font, glyph_id, font_size) {
                 Some(matching) => matching,
                 // Keep the unscaled bitmap for a glyph that has nothing else.
                 None if font.outline_glyphs().get(glyph_id.into()).is_none() => image,
