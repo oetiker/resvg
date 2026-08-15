@@ -14,8 +14,8 @@ use usvg::fontdb;
 #[rustfmt::skip]
 mod render;
 
-mod extra;
 mod bitmap;
+mod extra;
 mod hinting;
 
 const IMAGE_SIZE: u32 = 300;
