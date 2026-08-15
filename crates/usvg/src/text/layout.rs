@@ -1177,9 +1177,19 @@ fn form_glyph_clusters(glyphs: &[Glyph], text: &str, font_size: f32) -> GlyphClu
             id: glyph.id,
         });
 
-        x += glyph.width as f32;
+        // A glyph drawn from a strike is spaced by the strike's own advance.
+        let glyph_width = match glyph.advance_px {
+            Some(advance_px) => advance_px,
+            None => glyph.width as f32 * sx,
+        };
 
-        let glyph_width = glyph.width as f32 * sx;
+        // `x` positions the next glyph of the same cluster and is in font
+        // units, since `glyph_ts` is scaled by `sx` later on.
+        x += match sx {
+            0.0 => glyph.width as f32,
+            sx => glyph_width / sx,
+        };
+
         advance += glyph_width;
         if glyph_width > width {
             width = glyph_width;
@@ -1338,6 +1348,7 @@ pub(crate) fn shape_text(
         variations,
         font_size,
         font_optical_sizing,
+        &resolver.select_bitmap,
         fontdb,
     )
     .unwrap_or_default();
@@ -1372,6 +1383,7 @@ pub(crate) fn shape_text(
                 variations,
                 font_size,
                 font_optical_sizing,
+                &resolver.select_bitmap,
                 fontdb,
             )
             .unwrap_or_default();
@@ -1432,6 +1444,7 @@ fn shape_text_with_font(
     variations: &[crate::FontVariation],
     font_size: f32,
     font_optical_sizing: crate::FontOpticalSizing,
+    select_bitmap: &crate::BitmapSelectionFn,
     fontdb: &fontdb::Database,
 ) -> Option<Vec<Glyph>> {
     fontdb.with_face_data(font.id, |font_data, face_index| -> Option<Vec<Glyph>> {
@@ -1440,6 +1453,19 @@ fn shape_text_with_font(
         use crate::text::OPSZ;
 
         let hr_font = harfrust::FontRef::from_index(font_data, face_index).ok()?;
+
+        // Resolved once per shaping run rather than per glyph: the hook keys on
+        // the face and the size, neither of which varies within a run, and a
+        // face without strikes can be dismissed outright. A host that declines
+        // a font's strikes gets its outline drawn, so it has to get the
+        // outline's spacing too.
+        let strike_source = select_bitmap(font.id, font_size, fontdb)
+            .then(|| skrifa::FontRef::from_index(font_data, face_index).ok())
+            .flatten()
+            .filter(|font| {
+                use skrifa::MetadataProvider;
+                !font.bitmap_strikes().is_empty()
+            });
 
         // Build the list of variations to apply
         let mut variations: Vec<Variation> = variations
@@ -1535,6 +1561,9 @@ fn shape_text_with_font(
                     dx: pos.x_offset,
                     dy: pos.y_offset,
                     width: pos.x_advance,
+                    advance_px: strike_source.as_ref().and_then(|source| {
+                        crate::text::bitmap::mask_advance(source, GlyphId(info.glyph_id), font_size)
+                    }),
                     font: font.clone(),
                 });
             }
@@ -1637,6 +1666,11 @@ pub(crate) struct Glyph {
 
     /// The glyph width / X-advance in font units.
     pub(crate) width: i32,
+
+    /// The advance the glyph's own bitmap strike gives, in pixels, when it is a
+    /// strike that will actually be drawn. `None` means the outline's advance
+    /// in `width` stands, which is the ordinary case.
+    pub(crate) advance_px: Option<f32>,
 
     /// Reference to the source font.
     ///
@@ -1840,5 +1874,81 @@ impl ByteIndex {
     /// Converts byte position into a character.
     pub(crate) fn char_from(&self, text: &str) -> char {
         text[self.0..].chars().next().unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn resolved_font(units_per_em: u16) -> Arc<ResolvedFont> {
+        Arc::new(ResolvedFont {
+            id: ID::dummy(),
+            units_per_em: NonZeroU16::new(units_per_em).unwrap(),
+            ascent: 800,
+            descent: -200,
+            x_height: NonZeroU16::new(500).unwrap(),
+            underline_position: -100,
+            underline_thickness: NonZeroU16::new(50).unwrap(),
+            line_through_position: 250,
+            subscript_offset: 100,
+            superscript_offset: 300,
+        })
+    }
+
+    fn glyph(width: i32, advance_px: Option<f32>, font: Arc<ResolvedFont>) -> Glyph {
+        Glyph {
+            byte_idx: ByteIndex::new(0),
+            cluster_len: 1,
+            text: "H".to_string(),
+            id: GlyphId(1),
+            dx: 0,
+            dy: 0,
+            width,
+            advance_px,
+            font,
+        }
+    }
+
+    /// A pixel font's strike carries its own advance, in whole pixels, drawn
+    /// for that one pixel size. It is not the outline's advance scaled — the
+    /// two only agree at the size the outline was fitted to — so spacing a
+    /// glyph that is drawn from a strike by the outline's advance both spaces
+    /// it wrongly and, since a scaled advance is rarely a whole number of
+    /// pixels, drops it between pixels where its strike cannot be reproduced.
+    #[test]
+    fn a_strikes_own_advance_spaces_the_glyph() {
+        // An outline advance of 2000/3400 em is 7.06 px at 12 px, while the
+        // 12 px strike this glyph is drawn from advances a whole 7 px.
+        let font = resolved_font(3400);
+        let outline_only = form_glyph_clusters(&[glyph(2000, None, font.clone())], "H", 12.0);
+        assert!((outline_only.advance - 7.0588236).abs() < 1e-4);
+
+        let from_strike = form_glyph_clusters(&[glyph(2000, Some(7.0), font)], "H", 12.0);
+        assert_eq!(from_strike.advance, 7.0);
+        assert_eq!(from_strike.width, 7.0);
+    }
+
+    /// Within a cluster the glyphs after the first are offset from the ones
+    /// before, and that offset is in font units, so it has to follow the same
+    /// advance.
+    #[test]
+    fn a_strikes_advance_also_offsets_the_next_glyph_of_a_cluster() {
+        let font = resolved_font(3400);
+        let cluster = form_glyph_clusters(
+            &[
+                glyph(2000, Some(7.0), font.clone()),
+                glyph(2000, Some(7.0), font),
+            ],
+            "HH",
+            12.0,
+        );
+
+        assert_eq!(cluster.advance, 14.0);
+        // The second glyph sits one whole 7 px advance further along. Its own
+        // transform is in font units, undone by the `font_size / upem` scale
+        // that is applied to it later.
+        let second = cluster.glyphs[1].glyph_ts;
+        assert!((second.tx * 12.0 / 3400.0 - 7.0).abs() < 1e-4);
     }
 }

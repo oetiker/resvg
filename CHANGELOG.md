@@ -14,7 +14,10 @@ This changelog also contains important changes in dependencies.
   and 8 bits per pixel) and for uncompressed BGRA bitmap glyphs. Previously only PNG
   bitmap glyphs were rendered. Mask glyphs are painted with the text fill color and are
   drawn without interpolation, and a monochrome strike is only used at the size it was
-  drawn for, leaving the other sizes to the outline.
+  drawn for, leaving the other sizes to the outline. A glyph drawn from a mask strike is
+  spaced by that strike's own advance rather than by the outline's, since a pixel font is
+  drawn per size while a single `hmtx` advance can only scale, and it is blitted onto
+  whole pixels so that the grid it was drawn on survives.
 - Optional font hinting via `Options::font_hinting`, which grid-fits glyph outlines so that
   stems align to whole pixels. Disabled by default, since an SVG is resolution independent
   while hinting is not. Elements with `text-rendering="geometricPrecision"` are never

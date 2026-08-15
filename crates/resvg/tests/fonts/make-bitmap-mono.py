@@ -12,8 +12,11 @@ from fontTools.ttLib import TTFont
 
 SRC = "TerminusTTF-Regular.ttf"
 DST = "BitmapMono.subset.ttf"
-# Two strikes, so that a size in between them has to fall back to the outline.
-PPEMS = (16, 24)
+# 16 and 24 leave a size in between them that has to fall back to the outline.
+# 14 is the one strike here whose advance the outline cannot express: Terminus
+# is 8x14 at this size and 8x16 at the next, while a single `hmtx` advance can
+# only scale, so it says 7 where the strike says 8.
+PPEMS = (14, 16, 24)
 FAMILY = "Bitmap Mono"
 PS_NAME = "BitmapMono-Regular"
 # Space, digits and the latin alphabet.
