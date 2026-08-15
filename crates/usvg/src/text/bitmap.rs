@@ -72,6 +72,9 @@ pub(crate) struct BitmapImage {
     pub(crate) pixels_per_em: u16,
     pub(crate) glyph_bbox: Option<BoundingBox<i16>>,
     pub(crate) is_sbix: bool,
+    /// True for a coverage mask, i.e. a strike drawn for one specific pixel
+    /// size by a pixel font, as opposed to a color bitmap.
+    pub(crate) is_mask: bool,
 }
 
 /// Encodes 8-bit RGBA pixels as PNG, the only raw image format `ImageKind` can
@@ -264,6 +267,8 @@ pub(crate) fn glyph(fontdb: &Database, key: BitmapGlyphKey) -> Option<BitmapImag
         // drawn on, and bleeds into the transparent border of the image
         // where a stem touches the edge of the glyph box, so keep the
         // pixels intact instead.
+        let is_mask = matches!(image.data, BitmapData::Mask(_));
+
         let (png_data, rendering_mode) = match image.data {
             BitmapData::Png(data) => (data.to_vec(), ImageRendering::OptimizeQuality),
             BitmapData::Bgra(data) => (
@@ -303,6 +308,7 @@ pub(crate) fn glyph(fontdb: &Database, key: BitmapGlyphKey) -> Option<BitmapImag
             y: image.inner_bearing_y as i16,
             pixels_per_em: image.ppem_x as u16,
             glyph_bbox: bounding_box,
+            is_mask,
             is_sbix: bitmap_strikes.format() == Some(BitmapFormat::Sbix),
         };
 

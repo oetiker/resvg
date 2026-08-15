@@ -16,7 +16,8 @@ This changelog also contains important changes in dependencies.
   drawn without interpolation, and a monochrome strike is only used at the size it was
   drawn for, leaving the other sizes to the outline. A glyph drawn from a mask strike is
   spaced by that strike's own advance rather than by the outline's, since a pixel font is
-  drawn per size while a single `hmtx` advance can only scale.
+  drawn per size while a single `hmtx` advance can only scale, and it is blitted onto
+  whole pixels so that the grid it was drawn on survives.
 
 ## [0.48.1] 2026-08-02
 

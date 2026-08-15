@@ -48,6 +48,56 @@ fn effective_variations(
     variations
 }
 
+/// Moves a bitmap glyph onto whole pixels.
+///
+/// A strike is a picture of the glyph drawn for one exact pixel size, so it is
+/// only reproduced faithfully when it is blitted onto the pixel grid it was
+/// drawn on. Spacing the glyphs by their strikes' own advances keeps a run on
+/// that grid without any help, but only for as long as the run starts on it:
+/// a fractional `x`, a fractional `letter-spacing`, or a `text-anchor` that
+/// halves an odd width all move the whole run off again. The image is then
+/// painted over a rectangle with fractional edges, so its outermost row and
+/// column come out partially covered, i.e. anti-aliased. On a monochrome
+/// target those partial pixels are the difference between a stem and no stem.
+///
+/// Rounding is only meaningful where a user-space unit *is* a pixel, so this
+/// gives up unless the glyph lands unrotated and unscaled — fitting a glyph to
+/// the device grid is only possible at a render that has one.
+///
+/// `abs` is the absolute transform of the text element, `local` the glyph's
+/// own; the returned transform replaces `local`.
+fn snap_bitmap_glyph(abs: Transform, local: Transform) -> Transform {
+    // A skew or a rotation anywhere means there is no pixel grid to snap to.
+    if abs.kx != 0.0 || abs.ky != 0.0 {
+        return local;
+    }
+
+    let full = abs.pre_concat(local);
+    if full.kx != 0.0 || full.ky != 0.0 {
+        return local;
+    }
+
+    // f32 does not divide a font's units per em exactly, so the scale that
+    // should cancel out to 1 can arrive a bit beside it.
+    const EPS: f32 = 1.0e-4;
+    if (full.sx.abs() - 1.0).abs() > EPS || (full.sy.abs() - 1.0).abs() > EPS {
+        return local;
+    }
+
+    let dx = full.tx.round() - full.tx;
+    let dy = full.ty.round() - full.ty;
+    if dx == 0.0 && dy == 0.0 {
+        return local;
+    }
+
+    // The shift is a device-space one, so it has to be expressed in the space
+    // `local` lives in, which `abs` scales by.
+    if abs.sx == 0.0 || abs.sy == 0.0 {
+        return local;
+    }
+    Transform::from_translate(dx / abs.sx, dy / abs.sy).pre_concat(local)
+}
+
 fn push_outline_paths(
     span: &layout::Span,
     builder: &mut tiny_skia_path::PathBuilder,
@@ -175,7 +225,15 @@ pub(crate) fn flatten(text: &mut Text, cache: &mut Cache) -> Option<(Group, NonZ
                         img.image.size.height(),
                     )
                 } else {
-                    glyph.cbdt_transform(img.x as f32, img.y as f32, img.pixels_per_em as f32)
+                    let transform =
+                        glyph.cbdt_transform(img.x as f32, img.y as f32, img.pixels_per_em as f32);
+                    // Only a mask is a picture of the pixel grid. A color
+                    // bitmap is an image of its own, so nothing is lost by
+                    // letting it sit where the layout put it.
+                    match img.is_mask {
+                        true => snap_bitmap_glyph(abs_transform, transform),
+                        false => transform,
+                    }
                 };
 
                 let mut group = Group {

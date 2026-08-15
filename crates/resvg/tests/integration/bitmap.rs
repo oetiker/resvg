@@ -1,9 +1,9 @@
 // Copyright 2026 the Resvg Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-// How a strike is spaced is not something an SVG can ask for, so these render
-// their own documents and measure the result rather than compare against a
-// reference image.
+// How a strike is spaced and where it lands on the pixel grid are not things an
+// SVG can ask for, so these render their own documents and measure the result
+// rather than compare against a reference image.
 
 use crate::GLOBAL_FONTDB;
 
@@ -22,6 +22,38 @@ fn render(svg: &str) -> tiny_skia::Pixmap {
         &mut pixmap.as_mut(),
     );
     pixmap
+}
+
+/// Every distinct alpha value in the rendering.
+fn alphas(svg: &str) -> std::collections::BTreeSet<u8> {
+    render(svg).pixels().iter().map(|p| p.alpha()).collect()
+}
+
+/// The text is placed at a whole and at a fractional x, in a document that is
+/// rendered unscaled, so a user-space unit is a device pixel.
+fn text_at(x: &str) -> String {
+    format!(
+        r#"<svg viewBox="0 0 300 200" width="300" height="200" xmlns="http://www.w3.org/2000/svg">
+            <text x="{x}" y="40" font-family="Bitmap Mono" font-size="16">Bitmap 16</text>
+        </svg>"#
+    )
+}
+
+#[test]
+fn a_strike_is_blitted_onto_whole_pixels() {
+    // A strike is a picture of one exact pixel grid. Painting it over a
+    // rectangle with fractional edges anti-aliases its outermost row and
+    // column, which on a monochrome target is the difference between a stem
+    // and no stem. Spacing a glyph by its strike's advance keeps a run on the
+    // grid on its own, but only as long as the document puts the run there —
+    // a fractional x, or a fractional letter-spacing, moves it off again.
+    for x in ["20", "20.25", "20.5", "20.75"] {
+        assert_eq!(
+            alphas(&text_at(x)),
+            [0, 255].into_iter().collect(),
+            "a strike placed at x={x} was not blitted onto whole pixels"
+        );
+    }
 }
 
 /// The rightmost inked column of `text` set at `font_size`, or `None` when
