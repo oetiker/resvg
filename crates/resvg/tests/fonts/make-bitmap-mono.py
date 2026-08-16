@@ -1,4 +1,8 @@
-"""Build a small monochrome-bitmap test font from Terminus (TTF).
+"""Build small monochrome-bitmap test fonts from Terminus (TTF).
+
+Two are produced: one with outlines behind its strikes, and an outline-free
+sibling. A bitmap font need not carry outlines at all, and the two take
+different paths through the renderer, so both have to be covered.
 
 pyftsubset drops EBDT/EBLC, so the strike is pruned by hand and re-attached to
 the subsetted font. The result is renamed because "Terminus" is an OFL Reserved
@@ -12,6 +16,7 @@ from fontTools.ttLib import TTFont
 
 SRC = "TerminusTTF-Regular.ttf"
 DST = "BitmapMono.subset.ttf"
+DST_NO_OUTLINE = "BitmapMonoNoOutline.subset.ttf"
 # 16 and 24 leave a size in between them that has to fall back to the outline.
 # 14 is the one strike here whose advance the outline cannot express: Terminus
 # is 8x14 at this size and 8x16 at the next, while a single `hmtx` advance can
@@ -19,6 +24,8 @@ DST = "BitmapMono.subset.ttf"
 PPEMS = (14, 16, 24)
 FAMILY = "Bitmap Mono"
 PS_NAME = "BitmapMono-Regular"
+FAMILY_NO_OUTLINE = "Bitmap Mono No Outline"
+PS_NAME_NO_OUTLINE = "BitmapMonoNoOutline-Regular"
 # Space, digits and the latin alphabet.
 CHARS = [0x20, *range(0x30, 0x3A), *range(0x41, 0x5B), *range(0x61, 0x7B)]
 
@@ -59,19 +66,32 @@ ebdt.strikeData = [
 font["EBLC"] = eblc
 font["EBDT"] = ebdt
 
-names = {1: FAMILY, 3: PS_NAME, 4: FAMILY, 6: PS_NAME, 16: FAMILY, 18: FAMILY}
-name_table = font["name"]
-for record in list(name_table.names):
-    if record.nameID in names:
-        name_table.setName(
-            names[record.nameID],
-            record.nameID,
-            record.platformID,
-            record.platEncID,
-            record.langID,
-        )
+def rename(target, family, ps_name):
+    labels = {1: family, 3: ps_name, 4: family, 6: ps_name, 16: family, 18: family}
+    table = target["name"]
+    for record in list(table.names):
+        if record.nameID in labels:
+            table.setName(
+                labels[record.nameID],
+                record.nameID,
+                record.platformID,
+                record.platEncID,
+                record.langID,
+            )
 
+
+rename(font, FAMILY, PS_NAME)
 font.save(DST)
+
+# The outline-free sibling. Dropping the outline tables outright is what a real
+# pixel font does; a font that keeps empty outlines instead is a different case,
+# because the renderer then finds an outline and draws nothing.
+bare = TTFont(DST)
+for tag in ("glyf", "loca", "cvt ", "fpgm", "prep", "gasp"):
+    if tag in bare:
+        del bare[tag]
+rename(bare, FAMILY_NO_OUTLINE, PS_NAME_NO_OUTLINE)
+bare.save(DST_NO_OUTLINE)
 
 check = TTFont(DST)
 assert "EBDT" in check and "EBLC" in check, "bitmap tables were lost"
@@ -81,4 +101,13 @@ strikes = [
 print(
     f"{DST}: family={check['name'].getDebugName(1)!r} "
     f"strikes={strikes} glyphs={len(check.getGlyphOrder())}"
+)
+
+bare_check = TTFont(DST_NO_OUTLINE)
+assert "glyf" not in bare_check and "loca" not in bare_check, "outlines survived"
+assert "EBDT" in bare_check and "EBLC" in bare_check, "bitmap tables were lost"
+print(
+    f"{DST_NO_OUTLINE}: family={bare_check['name'].getDebugName(1)!r} "
+    f"strikes={[s.bitmapSizeTable.ppemX for s in bare_check['EBLC'].strikes]} "
+    f"outlines=none"
 )

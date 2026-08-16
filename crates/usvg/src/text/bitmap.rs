@@ -213,14 +213,19 @@ fn matching_mask<'a>(
 /// over — the glyphs sit at the wrong distance from each other, and, because a
 /// scaled advance is rarely a whole number of pixels, every glyph after the
 /// first lands between pixels, where the strike cannot be reproduced.
+///
+/// Whether an outline stands behind the strike makes no difference here, and
+/// it must not: [`matching_mask`] already answers with the strike that [`glyph`]
+/// will draw at this exact size, and a strike drawn unscaled is spaced by its
+/// own advance no matter what else the font holds. A font with no outlines at
+/// all is in fact the case that needs this most, since then the strike is the
+/// only record of the right spacing — `hmtx` has one value per glyph and can
+/// be right at a single size at best.
 pub(crate) fn mask_advance(
     font: &skrifa::FontRef,
     glyph_id: GlyphId,
     font_size: f32,
 ) -> Option<f32> {
-    // A glyph with no outline at all keeps whatever strike it has, at any
-    // size, so its image is scaled and its advance is not this one.
-    font.outline_glyphs().get(glyph_id.into())?;
     matching_mask(font, glyph_id, font_size)?.advance
 }
 

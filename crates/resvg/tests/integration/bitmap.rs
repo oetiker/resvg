@@ -98,17 +98,12 @@ fn a_strike_is_blitted_onto_whole_pixels() {
     }
 }
 
-/// The rightmost inked column of `text` set at `font_size`, or `None` when
-/// nothing was drawn.
-fn last_inked_column(text: &str, font_size: u32) -> Option<u32> {
-    last_inked_column_with(text, font_size, true)
-}
-
-/// As [`last_inked_column`], with the host allowing or declining strikes.
-fn last_inked_column_with(text: &str, font_size: u32, allow_strikes: bool) -> Option<u32> {
+/// The rightmost inked column of `text` set in `family` at `font_size`, or
+/// `None` when nothing was drawn, with the host allowing or declining strikes.
+fn last_inked_column(family: &str, text: &str, font_size: u32, allow_strikes: bool) -> Option<u32> {
     let svg = format!(
         r#"<svg viewBox="0 0 300 60" width="300" height="60" xmlns="http://www.w3.org/2000/svg">
-            <text x="20" y="40" font-family="Bitmap Mono" font-size="{font_size}">{text}</text>
+            <text x="20" y="40" font-family="{family}" font-size="{font_size}">{text}</text>
         </svg>"#
     );
     let pixmap = render_with(&svg, allow_strikes);
@@ -126,13 +121,18 @@ fn last_inked_column_with(text: &str, font_size: u32, allow_strikes: bool) -> Op
 /// glyphs reaches `(n - 1)` advances further right than a single one, whatever
 /// the glyph's own ink and bearings are.
 fn measured_advance(font_size: u32, n: usize) -> f32 {
-    measured_advance_with(font_size, n, true)
+    measured_advance_of("Bitmap Mono", font_size, n, true)
 }
 
 /// As [`measured_advance`], with the host allowing or declining strikes.
 fn measured_advance_with(font_size: u32, n: usize, allow_strikes: bool) -> f32 {
-    let one = last_inked_column_with("M", font_size, allow_strikes).expect("nothing was drawn");
-    let many = last_inked_column_with(&"M".repeat(n), font_size, allow_strikes)
+    measured_advance_of("Bitmap Mono", font_size, n, allow_strikes)
+}
+
+/// As [`measured_advance`], for a font named by the caller.
+fn measured_advance_of(family: &str, font_size: u32, n: usize, allow_strikes: bool) -> f32 {
+    let one = last_inked_column(family, "M", font_size, allow_strikes).expect("nothing was drawn");
+    let many = last_inked_column(family, &"M".repeat(n), font_size, allow_strikes)
         .expect("nothing was drawn");
     (many - one) as f32 / (n - 1) as f32
 }
@@ -179,5 +179,29 @@ fn declining_strikes_also_declines_their_advance() {
         measured_advance_with(14, 8, false),
         7.0,
         "declined strikes should be spaced by the outline"
+    );
+}
+
+/// A strike is spaced by its own advance whether or not an outline stands
+/// behind it.
+///
+/// A pixel font need not carry outlines at all, and one that does not is the
+/// case where the strike's advance is the *only* record of the right spacing:
+/// `hmtx` can hold one value per glyph, so at best it is right at a single
+/// size. `Bitmap Mono No Outline` is `Bitmap Mono` with its outline tables
+/// removed, and 14px is the size where the two records disagree — 8px from the
+/// strike, 7px from `hmtx`.
+#[test]
+fn an_outline_free_strike_is_spaced_by_its_own_advance() {
+    assert_eq!(
+        measured_advance_of("Bitmap Mono No Outline", 14, 8, true),
+        8.0,
+        "an outline-free 14px strike was spaced by the 7px hmtx advance"
+    );
+
+    // 16px is the control: there the two records agree, so it holds either way.
+    assert_eq!(
+        measured_advance_of("Bitmap Mono No Outline", 16, 8, true),
+        8.0
     );
 }
